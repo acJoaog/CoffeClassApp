@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp"
-    android:backgroundTint="@color/black"
+    android:background="@color/black"
     >
 
     <!-- Título -->
@@ -54,6 +54,7 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
+            android:background="@drawable/result_bg"
             android:id="@+id/textViewResult"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
