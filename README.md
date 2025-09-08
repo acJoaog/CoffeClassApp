@@ -60,3 +60,5 @@ RioFechado
 
 1. Clone ou baixe o projeto.
 2. Abra o projeto no **Android Studio**.
+ou
+3. 📦 [Baixar APK](https://github.com/acJoaog/CoffeClass/releases/download/v0.1/app-debug.apk)
