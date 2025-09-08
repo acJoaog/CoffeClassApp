@@ -10,7 +10,7 @@ CoffeeClass é um aplicativo Android que utiliza **TensorFlow Lite** para classi
 - Classificação de imagens usando modelo TFLite.
 - Captura múltipla (3 fotos) antes da classificação final.
 - Exibição da **classe mais frequente** como resultado.
-- Layout moderno e responsivo com `CardView` e `ConstraintLayout`.
+- Layout simples para demonstração
 
 ---
 
@@ -41,7 +41,7 @@ app/
 ---
 
 ## Classificação
-- O modelo testado utiliza o formato  float32.
+- O modelo testado utiliza o formato float32.
 ---
 
 ## Labels
@@ -60,7 +60,3 @@ RioFechado
 
 1. Clone ou baixe o projeto.
 2. Abra o projeto no **Android Studio**.
-3. Certifique-se de adicionar as permissões no `AndroidManifest.xml`:
-
-```xml
-<uses-permission android:name="android.permission.CAMERA" />
