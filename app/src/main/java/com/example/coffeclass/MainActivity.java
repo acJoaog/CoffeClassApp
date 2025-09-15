@@ -98,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startCaptureProcess() {
+        textView.setText("Resultado: ");
         capturedImages.clear();
 
         for (int i = 0; i < TOTAL_PHOTOS; i++) {
@@ -115,11 +116,6 @@ public class MainActivity extends AppCompatActivity {
                     public void onCaptureSuccess(@NonNull ImageProxy image) {
                         Bitmap bitmap = imageProxyToBitmap(image);
                         capturedImages.add(bitmap);
-                        runOnUiThread(() ->
-                                Toast.makeText(MainActivity.this,
-                                        "Foto " + capturedImages.size() + " capturada",
-                                        Toast.LENGTH_SHORT).show()
-                        );
                         image.close();
 
                         if (capturedImages.size() == TOTAL_PHOTOS) {
