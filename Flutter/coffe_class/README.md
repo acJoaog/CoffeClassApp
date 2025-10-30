@@ -5,6 +5,8 @@ Desenvolvido para **produtores, baristas e entusiastas do café**, o app identif
 
 ---
 
+📦 [Baixar APK](https://github.com/acJoaog/CoffeClassApp/releases/download/v1.3/coffe_class.apk)
+
 ## Funcionalidades
 
 - **Captura automática de 3 fotos** com intervalo de 0.5s  
