@@ -84,6 +84,39 @@ class ClassifierService {
     return results;
   }
 
+  Map<String, dynamic>? findMostFrequentResult(List<List<Map<String, dynamic>>> allResults) {
+    // Count occurrences of each label
+    Map<String, List<double>> labelConfidences = {};
+    
+    for (var results in allResults) {
+      if (results.isNotEmpty) {
+        String label = results[0]['label'];
+        double confidence = results[0]['confidence'];
+        labelConfidences.putIfAbsent(label, () => []).add(confidence);
+      }
+    }
+
+    // Find most frequent label with highest confidence
+    String? mostFrequentLabel;
+    double highestAvgConfidence = 0;
+    
+    labelConfidences.forEach((label, confidences) {
+      if (confidences.length > (mostFrequentLabel == null ? 
+          0 : labelConfidences[mostFrequentLabel]!.length) ||
+          (confidences.length == (mostFrequentLabel == null ? 
+          0 : labelConfidences[mostFrequentLabel]!.length) &&
+          confidences.reduce((a, b) => a + b) / confidences.length > highestAvgConfidence)) {
+        mostFrequentLabel = label;
+        highestAvgConfidence = confidences.reduce((a, b) => a + b) / confidences.length;
+      }
+    });
+
+    return mostFrequentLabel != null ? {
+      'label': mostFrequentLabel,
+      'confidence': highestAvgConfidence
+    } : null;
+  }
+
   void dispose() {
     _interpreter?.close();
   }

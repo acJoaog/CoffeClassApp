@@ -194,7 +194,7 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
                       ? 'Capturando...'
                       : _isClassified
                           ? 'Nova Captura'
-                          : 'Capturar $TOTAL_PHOTOS Fotos',
+                          : 'Classificar',
                   style: const TextStyle(fontSize: 16),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -226,34 +226,41 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
             child: _allResults.isEmpty
                 ? const Center(
                     child: Text(
-                      'Capture fotos para ver os resultados',
+                      'Capture fotos para ver o resultado',
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   )
-                : ListView(
+                : Padding(
                     padding: const EdgeInsets.all(16),
-                    children: [
-                      const Text(
-                        'Resultado Médio ($TOTAL_PHOTOS fotos):',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 12),
-                      ..._aggregateResults().map((r) {
-                        final label = r['label'] as String;
-                        final conf = (r['confidence'] as double) * 100;
-                        return Card(
-                          elevation: 2,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-                            trailing: Text(
-                              '${conf.toStringAsFixed(1)}%',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.brown),
-                            ),
+                    child: Center(
+                      child: Card(
+                        elevation: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Resultado:',
+                                style: TextStyle(
+                                  fontSize: 20, 
+                                  fontWeight: FontWeight.bold
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _classifier.findMostFrequentResult(_allResults)?['label'] ?? 'Não identificado',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF4A7C59),
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      }).toList(),
-                    ],
+                        ),
+                      ),
+                    ),
                   ),
           ),
         ],
