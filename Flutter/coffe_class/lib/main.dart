@@ -88,7 +88,7 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
 
     setState(() {
       _isCapturing = false;
-      _status = 'Classificando $_capturedImages.length fotos...';
+      _status = 'Classificando ${_capturedImages.length * 3} imagens...';
     });
 
     await _classifyAll();
@@ -117,41 +117,27 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
   Future<void> _classifyAll() async {
     _allResults.clear();
     for (var image in _capturedImages) {
-      final result = await _classifier.classifyImage(image);
-      _allResults.add(result);
-    }
-  }
-
-  List<Map<String, dynamic>> _aggregateResults() {
-    final Map<String, double> totals = {};
-    for (var results in _allResults) {
-      for (var r in results) {
-        final label = r['label'] as String;
-        final conf = r['confidence'] as double;
-        totals[label] = (totals[label] ?? 0.0) + conf;
+      final augmentedResults = await _classifier.classifyWithAugmentations(image);
+      for (var res in augmentedResults) {
+        _allResults.add(res);
       }
     }
-
-    final avgResults = totals.entries.map((e) {
-      return {'label': e.key, 'confidence': e.value / _allResults.length};
-    }).toList();
-
-    avgResults.sort((a, b) => (b['confidence'] as double).compareTo(a['confidence'] as double));
-    return avgResults;
   }
 
   @override
   Widget build(BuildContext context) {
+    final result = _classifier.findMostFrequentResult(_allResults);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Classificador de Café'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF4A7C59), // Verde café
-        titleTextStyle: TextStyle( color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        backgroundColor: const Color(0xFF4A7C59),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
       ),
       body: Column(
         children: [
-          // PREVIEW DA CÂMERA (300dp, PROPORCIONAL)
+          // PREVIEW DA CÂMERA
           Container(
             width: 300,
             height: 300,
@@ -178,7 +164,7 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
 
           const SizedBox(height: 16),
 
-          // BOTÃO ANIMADO
+          // BOTÃO
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: AnimatedSwitcher(
@@ -198,7 +184,7 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
                   style: const TextStyle(fontSize: 16),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isClassified ? const Color(0xFF4A7C59) : Color(0xFF4A7C59), // Verde café
+                  backgroundColor: const Color(0xFF4A7C59),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -221,7 +207,7 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
 
           const SizedBox(height: 16),
 
-          // RESULTADOS
+          // RESULTADO
           Expanded(
             child: _allResults.isEmpty
                 ? const Center(
@@ -240,22 +226,15 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text(
-                                'Resultado:',
-                                style: TextStyle(
-                                  fontSize: 20, 
-                                  fontWeight: FontWeight.bold
-                                ),
-                              ),
+                              const Text('Resultado:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 16),
                               Text(
-                                _classifier.findMostFrequentResult(_allResults)?['label'] ?? 'Não identificado',
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4A7C59),
-                                ),
+                                result?['label'] ?? 'Não identificado',
+                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF4A7C59)),
                               ),
+                              if (result != null) ...[
+                                const SizedBox(height: 8),
+                              ],
                             ],
                           ),
                         ),
@@ -273,6 +252,20 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
     _controller.dispose();
     _classifier.dispose();
     WidgetsBinding.instance.removeObserver(this);
+
+    // DELETAR IMAGENS TEMPORÁRIAS
+    for (var xfile in _capturedImages) {
+      final file = File(xfile.path);
+      if (file.existsSync()) {
+        try {
+          file.deleteSync();
+        } catch (e) {
+          print('Erro ao deletar imagem temporária: $e');
+        }
+      }
+    }
+    _capturedImages.clear();
+
     super.dispose();
   }
 
