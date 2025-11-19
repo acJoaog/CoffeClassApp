@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -32,18 +31,23 @@ class ClassifierScreen extends StatefulWidget {
   State<ClassifierScreen> createState() => _ClassifierScreenState();
 }
 
-class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBindingObserver {
+class _ClassifierScreenState extends State<ClassifierScreen>
+    with WidgetsBindingObserver {
   late CameraController _controller;
   final _classifier = ClassifierService();
+
   List<XFile> _capturedImages = [];
   List<List<Map<String, dynamic>>> _allResults = [];
+
   bool _isCapturing = false;
   bool _isProcessing = false;
   bool _isClassified = false;
   String _status = 'Inicializando...';
 
+  bool _useAverageMode = true;
+
   static const int TOTAL_PHOTOS = 3;
-  static const int DELAY_MS = 500;
+  static const int DELAY_MS = 600;
 
   @override
   void initState() {
@@ -58,7 +62,6 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
       setState(() => _status = 'Câmera não disponível');
       return;
     }
-
     _controller = CameraController(cameras[0], ResolutionPreset.high);
     await _controller.initialize();
     if (mounted) {
@@ -84,29 +87,25 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
 
       setState(() => _status = 'Capturando foto ${i + 1} de $TOTAL_PHOTOS...');
       await _capturePhoto();
+
+      final results = await _classifier.classifyImage(_capturedImages.last);
+      _allResults.add(results);
     }
 
     setState(() {
       _isCapturing = false;
-      _status = 'Classificando ${_capturedImages.length * 3} imagens...';
+      _isProcessing = false;
+      _isClassified = true;
+      _status = 'Classificação concluída!';
     });
-
-    await _classifyAll();
-
-    if (mounted) {
-      setState(() {
-        _isClassified = true;
-        _isProcessing = false;
-        _status = 'Classificação concluída!';
-      });
-    }
   }
 
   Future<void> _capturePhoto() async {
     try {
       final xFile = await _controller.takePicture();
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${tempDir.path}/photo_$timestamp.jpg');
       await File(xFile.path).copy(file.path);
       _capturedImages.add(XFile(file.path));
     } catch (e) {
@@ -114,66 +113,67 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
     }
   }
 
-  Future<void> _classifyAll() async {
-    _allResults.clear();
-    for (var image in _capturedImages) {
-      final augmentedResults = await _classifier.classifyWithAugmentations(image);
-      for (var res in augmentedResults) {
-        _allResults.add(res);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final result = _classifier.findMostFrequentResult(_allResults);
+    final result = _useAverageMode
+        ? _classifier.calculateAverageConfidence(_allResults)
+        : _classifier.calculateHighestConfidence(_allResults);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Classificador de Café'),
         centerTitle: true,
         backgroundColor: const Color(0xFF4A7C59),
-        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        titleTextStyle: const TextStyle(
+            color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
       ),
-      body: Column(
-        children: [
-          // PREVIEW DA CÂMERA
-          Container(
-            width: 300,
-            height: 300,
-            margin: const EdgeInsets.only(top: 16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.brown, width: 3),
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.black,
-            ),
-            child: _controller.value.isInitialized
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: FittedBox(
-                      fit: BoxFit.fill,
-                      child: SizedBox(
-                        width: _controller.value.previewSize?.width ?? 300,
-                        height: _controller.value.previewSize?.height ?? 300,
-                        child: CameraPreview(_controller),
-                      ),
-                    ),
-                  )
-                : const Center(child: CircularProgressIndicator()),
-          ),
 
-          const SizedBox(height: 16),
+      // scroll
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 40),
+        child: Center(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 16),
 
-          // BOTÃO
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: ElevatedButton.icon(
-                key: ValueKey<bool>(_isClassified),
-                onPressed: _isCapturing || _isProcessing ? null : _startCaptureProcess,
+              // preview
+              Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.brown, width: 3),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.black,
+                ),
+                child: _controller.value.isInitialized
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: _controller.value.previewSize!.height,
+                            height: _controller.value.previewSize!.width,
+                            child: CameraPreview(_controller),
+                          ),
+                        ),
+                      )
+                    : const Center(child: CircularProgressIndicator()),
+              ),
+
+              const SizedBox(height: 20),
+
+              // botao classificar
+              ElevatedButton.icon(
+                onPressed:
+                    _isCapturing || _isProcessing ? null : _startCaptureProcess,
                 icon: _isCapturing
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
                     : Icon(_isClassified ? Icons.refresh : Icons.camera_alt),
                 label: Text(
                   _isCapturing
@@ -181,68 +181,99 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
                       : _isClassified
                           ? 'Nova Captura'
                           : 'Classificar',
-                  style: const TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 18),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4A7C59),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-            ),
-          ),
 
-          const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
-          // STATUS
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              _status,
-              style: const TextStyle(fontSize: 14, color: Colors.brown),
-              textAlign: TextAlign.center,
-            ),
-          ),
+              // botao modo
+              if (_isClassified)
+                ElevatedButton.icon(
+                  onPressed: () =>
+                      setState(() => _useAverageMode = !_useAverageMode),
+                  icon: Icon(
+                      _useAverageMode ? Icons.bar_chart : Icons.trending_up),
+                  label: Text(_useAverageMode
+                      ? 'Usar Maior Confiança'
+                      : 'Usar Média das Confianças'),
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4A7C59),
+                    side:
+                        const BorderSide(color: Color(0xFF4A7C59), width: 2),
+                  ),
+                ),
 
-          const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-          // RESULTADO
-          Expanded(
-            child: _allResults.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Capture fotos para ver o resultado',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Center(
-                      child: Card(
-                        elevation: 4,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('Resultado:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 16),
-                              Text(
-                                result?['label'] ?? 'Não identificado',
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF4A7C59)),
-                              ),
-                              if (result != null) ...[
-                                const SizedBox(height: 8),
-                              ],
-                            ],
+              Text(
+                _status,
+                style: const TextStyle(fontSize: 15, color: Colors.brown),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 20),
+
+              // resultado final
+              if (_isClassified)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Resultado Final',
+                              style: TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          Text(
+                            result?['label'] ?? 'Indefinido',
+                            style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF4A7C59)),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '${((result?['confidence'] as double? ?? 0.0) * 100).toStringAsFixed(1)}%',
+                            style: TextStyle(
+                                fontSize: 28,
+                                color: Colors.brown[800],
+                                fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            result?['mode'] ?? '',
+                            style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.grey[700],
+                                fontStyle: FontStyle.italic),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                ),
+
+              const SizedBox(height: 40),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -253,18 +284,10 @@ class _ClassifierScreenState extends State<ClassifierScreen> with WidgetsBinding
     _classifier.dispose();
     WidgetsBinding.instance.removeObserver(this);
 
-    // DELETAR IMAGENS TEMPORÁRIAS
-    for (var xfile in _capturedImages) {
-      final file = File(xfile.path);
-      if (file.existsSync()) {
-        try {
-          file.deleteSync();
-        } catch (e) {
-          print('Erro ao deletar imagem temporária: $e');
-        }
-      }
+    for (var img in _capturedImages) {
+      final file = File(img.path);
+      if (file.existsSync()) file.deleteSync();
     }
-    _capturedImages.clear();
 
     super.dispose();
   }

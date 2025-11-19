@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:math' as math;
-
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 class ClassifierService {
@@ -28,19 +26,13 @@ class ClassifierService {
 
       _inputSize = _inputShape[1] == _inputShape[2] ? _inputShape[1] : 256;
       _outputSize = outputShape[1];
-      _isNCHW = _inputShape[1] == 3 && _inputShape[2] == _inputSize;
-
-      print('Input shape: $_inputShape (${_isNCHW ? "NCHW" : "NHWC"})');
-      print('Output size: $_outputSize');
+      _isNCHW = _inputShape[1] == 1 && _inputShape[1] == 3; // NCHW: [1,3,224,224]
 
       final labelsData = await rootBundle.loadString('assets/labels.txt');
-      _labels = labelsData
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty)
-          .toList();
+      _labels = labelsData.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
 
-      print('Modelo carregado: ${_labels!.length} classes');
+      print('Modelo carregado com sucesso: ${_labels!.length} classes');
+      print('Input shape: $_inputShape | Tamanho: $_inputSize | Formato: ${_isNCHW ? "NCHW" : "NHWC"}');
     } catch (e) {
       print('Erro ao carregar modelo: $e');
       rethrow;
@@ -49,153 +41,122 @@ class ClassifierService {
 
   Float32List _preprocessImage(img.Image image) {
     final resized = img.copyResize(image, width: _inputSize, height: _inputSize);
-    final input = Float32List(1 * _inputSize * _inputSize * 3);
-    int idx = 0;
+    final buffer = Float32List(1 * 3 * _inputSize * _inputSize);
+    int offset = 0;
 
     if (_isNCHW) {
+      // Formato NCHW [1, 3, H, W]
       for (int c = 0; c < 3; c++) {
-        for (int y = 0; y < _inputSize; y++) {
-          for (int x = 0; x < _inputSize; x++) {
-            final p = resized.getPixel(x, y);
-            final v = c == 0 ? p.r / 255.0 : c == 1 ? p.g / 255.0 : p.b / 255.0;
-            input[idx++] = v;
+        for (int h = 0; h < _inputSize; h++) {
+          for (int w = 0; w < _inputSize; w++) {
+            final pixel = resized.getPixel(w, h);
+            final value = c == 0
+                ? pixel.r / 255.0
+                : c == 1
+                    ? pixel.g / 255.0
+                    : pixel.b / 255.0;
+            buffer[offset++] = value;
           }
         }
       }
     } else {
-      for (int y = 0; y < _inputSize; y++) {
-        for (int x = 0; x < _inputSize; x++) {
-          final p = resized.getPixel(x, y);
-          input[idx++] = p.r / 255.0;
-          input[idx++] = p.g / 255.0;
-          input[idx++] = p.b / 255.0;
+      // Formato NHWC [1, H, W, 3]
+      for (int h = 0; h < _inputSize; h++) {
+        for (int w = 0; w < _inputSize; w++) {
+          final pixel = resized.getPixel(w, h);
+          buffer[offset++] = pixel.r / 255.0;
+          buffer[offset++] = pixel.g / 255.0;
+          buffer[offset++] = pixel.b / 255.0;
         }
       }
     }
-    return input;
-  }
-
-  img.Image _rotateImage(img.Image src, int angle) => img.copyRotate(src, angle: angle);
-
-  img.Image _shearImage(img.Image src, double shearDeg) {
-    final shear = math.tan(shearDeg * math.pi / 180.0);
-    final w = src.width;
-    final h = src.height;
-    final maxShift = (h * shear).abs().ceil();
-    final newW = w + maxShift;
-
-    final out = img.Image(width: newW, height: h, numChannels: src.numChannels);
-    final bg = src.numChannels == 4 ? img.ColorRgba8(0, 0, 0, 255) : img.ColorRgb8(0, 0, 0);
-    img.fill(out, color: bg);
-
-    final cx = h / 2.0;
-    final offset = maxShift ~/ 2;
-
-    for (int y = 0; y < h; y++) {
-      final shift = ((y - cx) * shear).round();
-      for (int x = 0; x < w; x++) {
-        final dstX = x + shift + offset;
-        if (dstX >= 0 && dstX < newW) {
-          out.setPixel(dstX, y, src.getPixel(x, y));
-        }
-      }
-    }
-
-    final cropX = (out.width - w) ~/ 2;
-    return img.copyCrop(out, x: cropX, y: 0, width: w, height: h);
-  }
-
-  List<img.Image> _generateAugmentedImages(img.Image original) {
-    final rand = math.Random();
-    final rot = rand.nextInt(31) - 15;
-    final shear = (rand.nextInt(31) - 15).toDouble();
-
-    final a = img.flipHorizontal(original);
-    final aRot = _rotateImage(a, rot);
-
-    final b = img.flipVertical(original);
-    final bShear = _shearImage(b, shear);
-
-    return [original, aRot, bShear];
+    return buffer;
   }
 
   Future<List<Map<String, dynamic>>> classifyImage(XFile file) async {
     final bytes = await file.readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) throw Exception('Falha ao decodificar imagem');
+    final image = img.decodeImage(bytes);
+    if (image == null) throw Exception('Não foi possível decodificar a imagem');
 
-    final raw = _preprocessImage(decoded);
-    final input = raw.reshape(_inputShape);
+    final inputData = _preprocessImage(image);
+    final input = inputData.reshape(_inputShape);
 
-    final outputBuffer = List.filled(1 * _outputSize, 0.0).reshape([1, _outputSize]);
-    final outputMap = {0: outputBuffer};
+    final output = List.filled(1 * _outputSize, 0.0).reshape([1, _outputSize]);
+    final outputMap = {0: output};
 
     _interpreter!.runForMultipleInputs([input], outputMap);
 
-    return _postprocess(outputBuffer[0]);
+    return _postprocess(output[0]);
   }
 
-  Future<List<List<Map<String, dynamic>>>> classifyWithAugmentations(XFile file) async {
-    final bytes = await file.readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) throw Exception('Falha ao decodificar imagem');
-
-    final variants = _generateAugmentedImages(decoded);
-    final all = <List<Map<String, dynamic>>>[];
-
-    for (final v in variants) {
-      final raw = _preprocessImage(v);
-      final input = raw.reshape(_inputShape);
-
-      final outputBuffer = List.filled(1 * _outputSize, 0.0).reshape([1, _outputSize]);
-      final outputMap = {0: outputBuffer};
-
-      _interpreter!.runForMultipleInputs([input], outputMap);
-      all.add(_postprocess(outputBuffer[0]));
-    }
-    return all;
-  }
-
-  List<Map<String, dynamic>> _postprocess(List<dynamic> output) {
-    final res = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _postprocess(List<dynamic> rawOutput) {
+    final List<Map<String, dynamic>> results = [];
     for (int i = 0; i < _outputSize; i++) {
-      final conf = (output[i] as num).toDouble();
-      if (conf > 0.01) {
-        res.add({'label': _labels![i], 'confidence': conf});
+      final confidence = (rawOutput[i] as num).toDouble();
+      if (confidence > 0.01) {
+        results.add({
+          'label': _labels![i],
+          'confidence': confidence,
+        });
       }
     }
-    res.sort((a, b) => (b['confidence'] as double).compareTo(a['confidence'] as double));
-    return res;
+    results.sort((a, b) => (b['confidence'] as double).compareTo(a['confidence'] as double));
+    return results;
   }
 
-  Map<String, dynamic>? findMostFrequentResult(List<List<Map<String, dynamic>>> all) {
-    final map = <String, List<double>>{};
+  /// MODO 1: Classe mais frequente -> média das suas confidências
+  Map<String, dynamic>? calculateAverageConfidence(List<List<Map<String, dynamic>>> allResults) {
+    if (allResults.isEmpty) return null;
 
-    for (final list in all) {
-      if (list.isNotEmpty) {
-        final label = list[0]['label'] as String;
-        final conf = list[0]['confidence'] as double;
-        map.putIfAbsent(label, () => []).add(conf);
+    final Map<String, List<double>> labelConfidences = {};
+
+    for (final resultList in allResults) {
+      if (resultList.isNotEmpty) {
+        final label = resultList[0]['label'] as String;
+        final conf = resultList[0]['confidence'] as double;
+        labelConfidences.putIfAbsent(label, () => []).add(conf);
       }
     }
 
-    if (map.isEmpty) return null;
+    if (labelConfidences.isEmpty) return null;
 
-    String? bestLabel;
-    double bestScore = -1.0;
+    String bestLabel = '';
+    double bestAvg = -1;
 
-    map.forEach((label, confs) {
-      final count = confs.length;
-      final avg = confs.reduce((a, b) => a + b) / count;
-      final score = count * avg;
-      if (score > bestScore) {
-        bestScore = score;
+    labelConfidences.forEach((label, confs) {
+      final avg = confs.reduce((a, b) => a + b) / confs.length;
+      if (avg > bestAvg) {
+        bestAvg = avg;
         bestLabel = label;
       }
     });
 
-    final avgConf = map[bestLabel!]!.reduce((a, b) => a + b) / map[bestLabel!]!.length;
-    return {'label': bestLabel!, 'confidence': avgConf};
+    return {
+      'label': bestLabel,
+      'confidence': bestAvg,
+      'mode': 'Média das Confianças',
+    };
+  }
+
+  /// MODO 2: Maior confiança absoluta (independente da classe)
+  Map<String, dynamic>? calculateHighestConfidence(List<List<Map<String, dynamic>>> allResults) {
+    Map<String, dynamic>? best;
+
+    for (final resultList in allResults) {
+      if (resultList.isNotEmpty) {
+        final candidate = resultList[0];
+        final conf = candidate['confidence'] as double;
+
+        if (best == null || conf > (best['confidence'] as double)) {
+          best = {
+            'label': candidate['label'],
+            'confidence': conf,
+            'mode': 'Maior Confiança',
+          };
+        }
+      }
+    }
+    return best;
   }
 
   void dispose() {

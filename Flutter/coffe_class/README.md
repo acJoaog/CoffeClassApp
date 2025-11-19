@@ -5,18 +5,15 @@ Desenvolvido para **produtores, baristas e entusiastas do café**, o app identif
 
 ---
 
-📦[Baixar APK](https://github.com/acJoaog/CoffeClassApp/releases/download/v1.5/coffe_class.apk)
+📦[Baixar APK](https://github.com/acJoaog/CoffeClassApp/releases/download/v1.6/coffe_class.apk)
 
 ## Funcionalidades
 
-- **Captura automática de 3 fotos** com intervalo de 0.5s  
-- **Data Augmentation em tempo real**:  
-  Para cada foto capturada, gera **2 versões aumentadas** → **9 imagens no total**  
-- **Transformações aplicadas**:
-  - `A`: Flip Horizontal + Rotação aleatória (±15°)
-  - `B`: Flip Vertical + Cisalhamento (shear) aleatório (±15°)
-- **Resultado final por votação ponderada**:  
-  **Frequência × Confiança Média** entre as 9 predições  
+- Captura automática de **3** fotos com intervalo de **0.6s**  
+- As 3 fotos são analisadas individualmente pelo modelo **TFLite**
+- Dois modos de decisão da predição final:  
+  - **Média das Confianças** da Classe Mais Frequente  
+  - **Maior Confiança** Absoluta
 - **Botão "Nova Captura"** com animação suave  
 - **Tema minimalista elegante** (Light Mode) com paleta de café  
 - **Preview da câmera**  
@@ -24,21 +21,10 @@ Desenvolvido para **produtores, baristas e entusiastas do café**, o app identif
 
 ---
 
-## Como Funciona o Cálculo da Moda (Robust Voting)
-```
-[3 fotos capturadas]
-↓
-Cada foto → [Original + AugA + AugB] = 3 versões
-↓
-9 predições → Top-1 de cada uma
-↓
-Agrupar por rótulo → count × média(confiança)
-↓
-Classe com maior score é exibida
-```
+## Mudança de Modo
 
-> **Mais robusto que moda simples**  
-> Evita falsos positivos por ruído ou iluminação
+- Após classificar, o usuário pode alternar entre “Média das Confianças” e “Maior Confiança”.
+- O app recalcula e atualiza o resultado exibido.
 
 ---
 
@@ -59,7 +45,7 @@ Classe com maior score é exibida
 - **TensorFlow Lite** (`tflite_flutter`)
 - **Camera** (`camera` plugin)
 - **Image Processing** (`image` package)
-- **Data Augmentation** (Flip, Rotate, Shear)
+- **Path provider** (`path_provider`)
 - **Material 3** (Design moderno)
 
 ---
@@ -119,5 +105,3 @@ build/app/outputs/flutter-apk/app-release.apk
 ```
 
 ---
-
-Coffee Class: Classificação de café com precisão, robustez e elegância.
