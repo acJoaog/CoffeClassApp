@@ -5,7 +5,7 @@ Desenvolvido para **produtores, baristas e entusiastas do café**, o app identif
 
 ---
 
-📦[Baixar APK](https://github.com/acJoaog/CoffeClassApp/releases/download/v1.6/coffe_class.apk)
+📦[Baixar APK](https://github.com/acJoaog/CoffeClassApp/releases/download/v1.7/coffe_class.apk)
 
 ## Funcionalidades
 
